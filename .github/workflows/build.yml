@@ -8,10 +8,6 @@ on:
       - '**.go'
       - 'go.mod'
       - 'go.sum'
-      - '**.py'
-      - '**.py'
-      - '**.py'
-      - 'requirements.txt'
       - 'Dockerfile'
       - '.dockerignore'
 
