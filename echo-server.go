@@ -1,10 +1,14 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -13,15 +17,33 @@ import (
 func main() {
 	// initialisation des logs
 	logrus.SetFormatter(&logrus.TextFormatter{})
-	s := &http.Server{
+
+	srv := &http.Server{
 		Addr:           ":8080",
 		Handler:        &customHandler{},
 		ReadTimeout:    10 * time.Second,
 		WriteTimeout:   10 * time.Second,
 		MaxHeaderBytes: 1 << 20,
 	}
-	logrus.Fatal(s.ListenAndServe())
 
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
+	go func() {
+		logrus.Info("echo-server start listening on port : 8080")
+		err := srv.ListenAndServe()
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
+			logrus.Fatalf("listen and serve returned err: %v", err)
+		}
+	}()
+
+	<-ctx.Done()
+	logrus.Info("got interruption signal")
+	if err := srv.Shutdown(context.TODO()); err != nil {
+		logrus.Errorf("server shutdown returned an err: %v\n", err)
+	}
+
+	logrus.Info("echo-server final")
 }
 
 type customHandler struct {
@@ -56,7 +78,6 @@ func getHeaderSize(r *http.Request) int {
 }
 
 func (h *customHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	buf := make([]byte, 1024)
 	resp := response{
 		Error:       "",
 		RemoteAddr:  r.RemoteAddr,
@@ -68,7 +89,9 @@ func (h *customHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		ContentSize: r.ContentLength,
 		ReadSize:    0,
 	}
+
 	if r.Body != nil {
+		buf := make([]byte, 1024)
 		for {
 			n, err := r.Body.Read(buf)
 			resp.ReadSize += n
@@ -76,7 +99,7 @@ func (h *customHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				break
 			}
 			if err != nil {
-				logrus.Errorf("(%s) %s - read body error: %s", r.RemoteAddr, resp.Url, err)
+				logrus.Errorf("(%s) %s - read body error: %v", r.RemoteAddr, resp.Url, err)
 				resp.Error = fmt.Sprintf("read body error: %s", err)
 				continue
 			}
@@ -86,14 +109,14 @@ func (h *customHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	b, err := json.MarshalIndent(resp, "", "  ")
 	if err != nil {
-		logrus.Errorf("(%s) %s - 500 - error Marshaling response: %s", r.RemoteAddr, resp.Url, err)
+		logrus.Errorf("(%s) %s - 500 - error Marshaling response: %v", r.RemoteAddr, resp.Url, err)
 		w.WriteHeader(500)
 		return
 	}
 	w.Header().Add("Content-Type", "application/json; charset=utf-8")
 	w.Header().Add("Cache-Control", "no-store")
 	if _, err := w.Write(b); err != nil {
-		logrus.Errorf("(%s) %s - error sending response: %s", r.RemoteAddr, resp.Url, err)
+		logrus.Errorf("(%s) %s - error sending response: %v", r.RemoteAddr, resp.Url, err)
 		return
 	}
 	logrus.Infof("(%s) %s - 200", r.RemoteAddr, resp.Url)
