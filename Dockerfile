@@ -11,8 +11,8 @@ WORKDIR /go/src/github.com/nvalembois/echo-server
 RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
     go build \
     -ldflags="-s -w" \
-    -o echo-server . \
- && chmod u=rwx,g=rx,o=rx echo-server
+    -o echo-server .
+RUN chmod u=rwx,g=rx,o=rx echo-server
 
 RUN echo 'echo-server:x:10001:10001:echo-server:/:/usr/sbin/nologin' >/tmp/passwd \
  && echo 'echo-server:x:10001:' >/tmp/group \
