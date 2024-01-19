@@ -1,0 +1,20 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended"
+  ],
+  "packageRules": [
+    {
+      "matchDatasources": ["github-tags", "github-runners"],
+      "groupName": "githubCi"
+    },
+    {
+      "matchPackageNames": ["go", "golang"],
+      "groupName": "goVersion"
+    },
+    {
+      "matchDatasources": ["go"],
+      "groupName": "goPackages"
+    }
+  ]
+}
